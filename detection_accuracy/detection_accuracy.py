@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-# Time-stamp: <2026-03-10 m.utrosa@bcbl.eu>
+# Time-stamp: <2026-03-16 m.utrosa@bcbl.eu>
 
 # 00. PREPARATION ---------------------------------------------------------------------------------
 ## Start by importing the neccesary modules and packages. If you do not have the python packages
@@ -12,23 +12,6 @@ from expyriment import design, control, stimuli, io, misc
 control.set_develop_mode(on=True) # developping == True / testing == False.
 
 # 01. DEFINE FUNCTIONS  ---------------------------------------------------------------------------
-def calculate_trial_duration(trial_list, parameter_list):
-	"""
-	Calculates duration in ms for each trial combination.
-	"""
-	durations = []
-	for combo in trial_list:
-		nodev_dur = combo[0] * parameter_list["TONE_DURATION"] + (combo[0] - 1) * combo[-1]
-		if combo[2] == "early":
-			duration =  nodev_dur - combo[1]
-			durations.append(duration)
-		elif combo[2] == "late":
-			duration = nodev_dur + combo[1]
-			durations.append(duration)
-		else:
-			durations.append(nodev_dur)
-	return durations
-
 def create_sequences(tone, param_combos, iti):
 	"""
 	tone is an expyriment tone stimulus.
@@ -109,24 +92,6 @@ def create_sequences(tone, param_combos, iti):
 
 	return soundtrack
 
-def create_deviations(num_values, min_val, max_val):
-
-	# Generate logarithmic values between 1 and 500
-	log_values = np.logspace(np.log10(min_val), np.log10(max_val), 2000)
-
-	# Bias weights: strongly favor higher values, but keep small chance for low ones
-	x = np.linspace(0, 1, len(log_values))
-	weights = (x ** 4) + 0.001  # steeper bias (x**4 makes small values rarer)
-	weights /= weights.sum()
-
-	# Randomly sample up to 50 unique values
-	chosen = np.random.choice(log_values, size=num_values, replace=False, p=weights)
-
-	# Round to integers and sort
-	chosen = np.sort(np.unique(np.rint(chosen).astype(int)))
-	chosen = [ch for ch in chosen]
-	return chosen
-
 # 02. SET PARAMETERS ------------------------------------------------------------------------------
 params = {
 
@@ -174,82 +139,10 @@ params = {
 	}
 
 # 03. STRUCTURE THE EXPERIMENT --------------------------------------------------------------------
-# NO_TONES: Integer number of sounds in the sequence that can be displaced timing-wise.
-NO_TONES = random.sample(
-	range(params["MIN_TONES"],params["MAX_TONES"]),
-	params["MAX_TONES"] - params["MIN_TONES"]
-	)
-
-# DEV: Absolute size of tone's timing deviation in milliseconds.
-DEV = create_deviations(params["DEV_NO"], params["DEV_MIN"], params["DEV_MAX"])
-DEV.insert(0, 0) # Have to add here because the log can't be 0 (logarithmically creating devs)
-
-# DEV_TYPE: Type of deviation (early or late).
-DEV_TYPE = ['early', 'on_time', 'late']
-
-# DEV_LOC: Position of the timing deviation in the sequence.
-#		   The first three tones are never displaced & the last one neither.
-DEV_LOC = random.sample(
-	range(params["MIN_TONES"] + 1, params["MAX_TONES"]),
-	params["MAX_TONES"] - (params["MIN_TONES"] + 1)
-	)
-DEV_LOC.insert(0, 0) # Include a location 0 for cases where there is no deviation in the sequence.
-
-ISI = random.sample(range(params["ISI_MIN"], params["ISI_MAX"]), params["ISI_NO"])
-
-# ALL_COMBOS: A list of tuples with all posible combinations of the above parameters.
-ALL_COMBOS = list(product(NO_TONES, DEV, DEV_TYPE, DEV_LOC, ISI))
-
-# VALID_COMBOS: removing invalid parameter combinations and adding constraints.
-VALID_COMBOS = []
-
-for combo in ALL_COMBOS:
-    no_tones  = combo[0]
-    deviation = combo[1]
-    dev_type  = combo[2]
-    dev_loc   = combo[3]
-    isi       = combo[4]
-
-    # dev_loc cannot exceed no_tones
-    if dev_loc > no_tones:
-        continue
-
-    # If DEV == 0, then DEV_TYPE must be "on_time" and DEV_LOC must be 0
-    if deviation == 0:
-        if dev_type != "on_time" or dev_loc != 0:
-            continue
-
-    # If DEV != 0, then DEV_LOC cannot be 0 (and type cannot be "on_time")
-    if deviation != 0:
-        if dev_loc == 0 or dev_type == "on_time":
-            continue
-
-    # ISI has to be longer than the deviation
-    if isi < np.abs(deviation): 
-        continue
-
-    # Fixed duration must remain positive
-    # duration = no_tones * tone_duration + (no_tones - 1) * ISI +/- dev
-    base_duration = (no_tones * params["TONE_DURATION"]) + ((no_tones - 1) * isi)
-    
-    # Check if the resulting duration is non-positive
-    if (base_duration - deviation) <= 0:
-        continue
-
-    # If all checks pass, add to list
-    VALID_COMBOS.append(combo)
-
 # TODO: use durations to ensure approximately the same duration of runs (Important for MRI protocol!)
 # COMBO_DURATIONS = calculate_trial_duration(VALID_COMBOS, params)
 # paired_trials = list(zip(VALID_COMBOS, COMBO_DURATIONS))
 # random.shuffle(paired_trials)
-
-# TRIAL_COMBOS: a random sample of no_trials per run.
-# RUN_COMBOS: a list of lists (trials), reflecting experiment structure
-RUN_COMBOS = []
-for run in range(params["NO_RUNS"]):
-	TRIAL_COMBOS = random.sample(VALID_COMBOS, params["NO_TRIALS"])
-	RUN_COMBOS.append(TRIAL_COMBOS)
 
 # 04. INITIALIZE THE EXPERIMENT -------------------------------------------------------------------
 exp = design.Experiment(name="timingDev")
