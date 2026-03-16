@@ -144,11 +144,12 @@ def create_experimental_sessions(params, sesID, save_csv=True, plot_hist=False, 
 
 	### b. Check the relationships between parameters
 	# ITI is longer than the longest ISI & DEV: for block separability
-	if params["ITI"] <= max(ISI) or params["ITI"] <= max(DEV):
-			raise ValueError(
-				f'ITI ({params["ITI"]} ms) is too short given the '
+	ITI = [params["ITI"]] # TODO: randomize/counterbalance the ITI
+	if min(ITI) <= max(ISI) or min(ITI) <= max(DEV):
+		raise ValueError(
+				f'ITI ({min(ITI)} ms) is too short given the '
 				f'max ISI ({max(ISI)} ms) / DEV ({max(DEV)} ms).'
-				)
+		)
 
 	# For separability of a new block in terms of tempo
 	# For change in tempo to not be perceived as a deviation
@@ -161,7 +162,7 @@ def create_experimental_sessions(params, sesID, save_csv=True, plot_hist=False, 
 
 	# 03. CREATE THE COMBINATIONS -----------------------------------------------------------------
 	# ALL_COMBOS: A list of tuples with all posible combinations of the above parameters.
-	ALL_COMBOS = list(product(NO_TONES, DEV, DEV_TYPE, DEV_LOC, ISI, FREQ, FREQ_TYPE, FREQ_LOC))
+	ALL_COMBOS = list(product(NO_TONES, DEV, DEV_TYPE, DEV_LOC, ISI, ITI, FREQ, FREQ_TYPE, FREQ_LOC))
 
 	# VALID_COMBOS: removing invalid parameter combinations and adding constraints.
 	VALID_COMBOS = []
@@ -172,9 +173,10 @@ def create_experimental_sessions(params, sesID, save_csv=True, plot_hist=False, 
 	    dev_type  = combo[2]
 	    dev_loc   = combo[3]
 	    isi       = combo[4]
-	    freq      = combo[5]
-	    freq_type = combo[6]
-	    freq_loc  = combo[7]
+	    iti       = combo[5]
+	    freq      = combo[6]
+	    freq_type = combo[7]
+	    freq_loc  = combo[8]
 
 	    # dev_loc cannot exceed no_tones
 	    if dev_loc >= no_tones:
@@ -231,10 +233,15 @@ def create_experimental_sessions(params, sesID, save_csv=True, plot_hist=False, 
 		TRIAL_COMBOS = random.sample(VALID_COMBOS, params["NO_TRIALS"])
 		
 		block_duration = 0
-		for trial in TRIAL_COMBOS:
+		for trial_no, trial in enumerate(TRIAL_COMBOS):
+
+			# Add trial number (ID) to the tuples
+			trial = trial + tuple((trial_no + 1,))
 
 			# Add run number (ID) to the tuples
 			trial = trial + tuple((run + 1,))
+
+			# Add the tuple with added run & trial no
 			RUN_COMBOS.append(trial)
 
 			# Calculate trial duration
@@ -267,9 +274,11 @@ def create_experimental_sessions(params, sesID, save_csv=True, plot_hist=False, 
 		"DEV_TYPE",
 		"DEV_LOC",
 		"ISI",
+		"ITI",
 		"FREQ",
 		"FREQ_TYPE",
 		"FREQ_LOC",
+		"TRIAL_NO",
 		"RUN_NO"]
 		)
 

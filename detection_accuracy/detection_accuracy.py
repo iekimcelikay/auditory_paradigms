@@ -1,98 +1,23 @@
 #! /usr/bin/env python
 # Time-stamp: <2026-03-16 m.utrosa@bcbl.eu>
 
-# 00. PREPARATION ---------------------------------------------------------------------------------
+# 01. PREPARATION ---------------------------------------------------------------------------------
 ## Start by importing the neccesary modules and packages. If you do not have the python packages
 ## installed on your laptop, you can install them with: pip install {package name}.
+
+# Import python packages
 import random
-import numpy as np
-from itertools import product
+import pandas as pd
+from pathlib import Path
 from expyriment import design, control, stimuli, io, misc
 
-control.set_develop_mode(on=True) # developping == True / testing == False.
+# Import custom-made functions
+import create_soundtrack_expyriment
 
-# 01. DEFINE FUNCTIONS  ---------------------------------------------------------------------------
-def create_sequences(tone, param_combos, iti):
-	"""
-	tone is an expyriment tone stimulus.
-	null is a null sound from Moerell's sound database.
-	param_combos is a random sample of valid parameter combinations.
+# Set developping mode: developping == True / testing == False.
+control.set_develop_mode(on=True)
 
-	"""
-	# Loop through runs (experimental blocks)
-	soundtrack = []
-	for cr, run in enumerate(param_combos):
-		run_id = cr + 1
-
-		sequence = []
-		# For each combination of parameters in a block
-		for ct, trial in enumerate(run):
-			trial_id = ct + 1
-
-			# Identify which part of the combination refers to which parameter
-			# TODO: better if dictionary (instead of tuple)
-			no_tones = trial[0]
-			dev      = trial[1]
-			dev_type = trial[2]
-			dev_loc  = trial[3]
-			isi      = trial[4]
-
-			for count in range(no_tones):
-				
-				# Add the tone ----
-				sequence.append(tone)
-				tone_id = count + 1
-				# tone.save(f"tone-{tone_id:02d}_trial-{trial_id:02d}_run-{run_id:02d}.wav")
-
-				# Add the isi ----
-				current_isi = isi
-
-				# For late tones, the ISI before the diplaced tone is longer, ISI after shorter.
-				if dev_type == "late":
-					if count == (dev_loc - 1): # ISI before
-						current_isi = isi + dev
-					elif count == dev_loc: # ISI after
-						current_isi = isi - dev
-
-				# For early tones, the ISI before the diplaced tone is shorter, ISI after longer.
-				elif dev_type == "early":
-					if count == (dev_loc - 1):
-						current_isi = isi - dev
-					elif count == dev_loc:
-						current_isi = isi + dev
-
-				isi_null = stimuli.Tone(
-						current_isi, # duration of the null tone
-						40000,       # inaudible frequency (outside the human range)
-						params["TONE_SAMPLERATE"],
-						params["TONE_BITDEPTH"]
-						)
-				isi_id = count + 1
-				# isi_null.save(f"isi-{isi_id:02d}_len-{current_isi}_trial-{trial_id:02d}_run-{run_id:02d}.wav")
-
-				# There is one less null tone (isi) in the sequence
-				if count < (no_tones - 1):
-					sequence.append(isi_null)
-
-			# Add an iti ----
-			# There is one less ITI than the number of trials
-			if ct < len(run) - 1:
-				iti_null = stimuli.Tone(
-						iti,         # duration of the null tone
-						40000,       # inaudible frequency (outside the human range)
-						params["TONE_SAMPLERATE"],
-						params["TONE_BITDEPTH"]
-						)
-				iti_id = count + 1
-				# iti_null.save(f"iti-{iti_id:02d}_len-{iti}_trial-{trial_id:02d}_run-{run_id:02d}.wav")
-
-			sequence.append(iti_null)
-			
-		soundtrack.append(sequence)
-
-	return soundtrack
-
-# 02. SET PARAMETERS ------------------------------------------------------------------------------
+# 02. LOAD PARAMETERS COMBO -----------------------------------------------------------------------
 params = {
 
 	# Visual
@@ -137,12 +62,13 @@ params = {
 	"DEV_MAX": 300, # Maximum tone timing deviation ISI (exclusive)
 	"DEV_NO" : 64,  # How many deviations to test? !!! TODO: this is not accurate as we correct for no signal trials to calculate sensitivity!!
 	}
+homePath  = Path("/home/mutrosa/Documents/projects/auditory_paradigms/detection_accuracy/")
+paramPath = homePath / "out" / "exp_parameter_combo_ses-002.csv"
+df = pd.read_csv(paramPath)
 
 # 03. STRUCTURE THE EXPERIMENT --------------------------------------------------------------------
-# TODO: use durations to ensure approximately the same duration of runs (Important for MRI protocol!)
-# COMBO_DURATIONS = calculate_trial_duration(VALID_COMBOS, params)
-# paired_trials = list(zip(VALID_COMBOS, COMBO_DURATIONS))
-# random.shuffle(paired_trials)
+no_runs   = len(df["RUN_NO"].unique())
+no_trials = len(df["TRIAL_NO"].unique())
 
 # 04. INITIALIZE THE EXPERIMENT -------------------------------------------------------------------
 exp = design.Experiment(name="timingDev")
@@ -166,15 +92,19 @@ cross  = stimuli.FixCross(
 cross.preload()
 cross.plot(canvas) # Plot on canvas now, less to do later
 canvas.preload()
-
 tone = stimuli.Tone(
 		params["TONE_DURATION"],
 		params["TONE_FREQUENCY"],
 		params["TONE_SAMPLERATE"],
 		params["TONE_BITDEPTH"]
 		)
-
-soundtrack = create_sequences(tone, RUN_COMBOS, params["ITI"])
+soundtrack = create_sequences(
+	tone,
+	df,
+	params["TONE_SAMPLERATE"],
+	params["TONE_BITDEPTH"], 
+	save_audio=False
+	)
 
 # Set up data storage
 exp.add_data_variable_names(['TRIAL_NO', 'NO_TONES', 'DEV', 'DEV_TYPE', 'DEV_LOC', 'ISI', 'RESPONSE'])
@@ -189,13 +119,13 @@ keyboard.wait(keys=[misc.constants.K_2])
 canvas.present()
 
 # Wait for the MRI scanner signal the start of functional sequence to sync the task.
-# keyboard.wait(keys=[misc.constants.K_s])
+keyboard.wait(keys=[misc.constants.K_s])
 
-# # Start the task after the 4th trigger. One "s" trigger per TR "trigger".
-# keyboard.wait(keys=[misc.constants.K_s])
-# keyboard.wait(keys=[misc.constants.K_s])
-# keyboard.wait(keys=[misc.constants.K_s])
-# keyboard.wait(keys=[misc.constants.K_s])
+# Start the task after the 4th trigger. One "s" trigger per TR "trigger".
+keyboard.wait(keys=[misc.constants.K_s])
+keyboard.wait(keys=[misc.constants.K_s])
+keyboard.wait(keys=[misc.constants.K_s])
+keyboard.wait(keys=[misc.constants.K_s])
 
 for cr, r in enumerate(soundtrack):
 	
