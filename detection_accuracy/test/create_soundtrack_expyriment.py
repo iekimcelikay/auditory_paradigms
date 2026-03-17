@@ -3,7 +3,7 @@
 '''
 Test script for create_soundtrack_expyriment() function.
 '''
-
+import numpy as np
 import pandas as pd
 from pathlib import Path
 from expyriment import design, control, stimuli, io, misc
@@ -24,11 +24,11 @@ def create_soundtrack_expyriment(df, samplerate, bitdepth, tone_duration, tone_f
 	Returns:
 		soundtrack: a list of lists, where each sublist is a tone sequence
 	"""
-   	# Initialize a list to store all tone sequences for this experimental session.
+	# Initialize a list to store all tone sequences for this experimental session.
 	soundtrack = []
 
-    # Ensure that the trials are ordered by run & trial IDs
-    df.sort_values(by=["RUN_NO", "TRIAL_NO"], inplace=True)
+	# Ensure that the trials are ordered by run & trial IDs
+	df.sort_values(by=["RUN_NO", "TRIAL_NO"], inplace=True)
 	
 	# Get number of trials per run
 	no_trials = len(df["TRIAL_NO"].unique())
@@ -51,6 +51,8 @@ def create_soundtrack_expyriment(df, samplerate, bitdepth, tone_duration, tone_f
 		iti      = trial.ITI
 		trial_id = trial.TRIAL_NO
 		run_id   = trial.RUN_NO
+
+		print(f"TRIAL-{trial_id:02d}, RUN-{erun_id:00d}")
 
 		# Raise error if timing and frequency deviants occur on the same tone
 		if freq_loc == dev_loc:
@@ -97,6 +99,7 @@ def create_soundtrack_expyriment(df, samplerate, bitdepth, tone_duration, tone_f
 					bitdepth
 				)
 
+			# TODO: add ramp to the sounds ------- !!!
 			# Add the sound to the sequence
 			sequence.append(tone)
 
@@ -151,6 +154,7 @@ def create_soundtrack_expyriment(df, samplerate, bitdepth, tone_duration, tone_f
 				iti_null.save(f"iti-{tone_count:02d}_len-{iti}_trial-{trial_id:02d}_run-{run_id:02d}.wav")
 		
 		# -------------- Join all segments ----------------
+		# final_sequence = np.concatenate(sequence) #TODO: Can we create a single audio from multiple tones in expyriment?
 		soundtrack.append(sequence)
 
 	df['AUDIO_SEQUENCE'] = soundtrack
@@ -181,11 +185,21 @@ if __name__ == "__main__":
 		params["SAMPLERATE"],
 		params["BITDEPTH"],
 		params["TONE_DURATION"],
-		params["TONE_FREQUENCY"],
+		params["BASE_FREQUENCY"],
 		params["NULL_FREQUENCY"],
 		)
 
 	# Play five trials
+	control.set_develop_mode(on=True)
+	exp = design.Experiment(name="test")
+	control.initialize(exp)
+	control.start(skip_ready_screen=True)
+	for i in range(5):
+		for segment in soundtrack[i]:
+			segment.play()
+			segment.wait_end()
+
+	control.end()
 
 	# Print info about the return results
 	print(df.head())
