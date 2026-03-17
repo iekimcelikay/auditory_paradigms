@@ -2,8 +2,6 @@
 # Time-stamp: <2026-03-16 m.utrosa@bcbl.eu>
 
 # 01. PREPARATION ---------------------------------------------------------------------------------
-## Start by importing the neccesary modules and packages. If you do not have the python packages
-## installed on your laptop, you can install them with: pip install {package name}.
 
 # Import python packages
 import random

@@ -93,6 +93,12 @@ def calculate_trial_duration(combo, params):
 
 	return nodev_dur
 
+# TODO: use durations to ensure approximately the same duration of runs (Important for MRI protocol!)
+# COMBO_DURATIONS = calculate_trial_duration(VALID_COMBOS, params)
+# paired_trials = list(zip(VALID_COMBOS, COMBO_DURATIONS))
+# random.shuffle(paired_trials)
+
+
 def create_experimental_sessions(params, sesID, save_csv=True, plot_hist=False, plot_bar=False, MAX_BLOCK_DURATION_MIN=15):
 	"""
 	Combines specified parameters in valid combinations, then randomly samples trials per run to

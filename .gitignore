@@ -4,8 +4,10 @@
 *.todo
 *.txt
 *.png
+*.csv
 
 # Untracked folders
+out/
 stimuli/
 stimuli_segments/
 data/
