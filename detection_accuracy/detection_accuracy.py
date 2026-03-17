@@ -90,12 +90,7 @@ cross  = stimuli.FixCross(
 cross.preload()
 cross.plot(canvas) # Plot on canvas now, less to do later
 canvas.preload()
-tone = stimuli.Tone(
-		params["TONE_DURATION"],
-		params["TONE_FREQUENCY"],
-		params["TONE_SAMPLERATE"],
-		params["TONE_BITDEPTH"]
-		)
+
 soundtrack = create_sequences(
 	tone,
 	df,

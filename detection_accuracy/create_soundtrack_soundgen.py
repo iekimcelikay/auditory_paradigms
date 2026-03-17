@@ -91,7 +91,7 @@ class SoundGen:
         """
         Generate tone sequences with timing deviants.
 
-        :param df: A dataframe with tone sequence parameters (assuming msec as unit for time).
+        :param df: A dataframe with tone sequence parameters with msec as the time unit.
         :param freq: Standard tone frequency in Hz.
         :param max_amplitude: Maximum amplitude to avoid clipping.
         :param num_harmonics: Number of harmonic tones.
@@ -99,7 +99,7 @@ class SoundGen:
         :param harmonic_factor: Harmonic amplitude decay factor for the tone.
         :param dbspl: Desired dB SPL (loudness) level (cannot change post sound creation).
         
-        :return: soundtrack: a list of arrays (audio samples) representing harmonic complex tone sequences.
+        :return: soundtrack: a list of arrays (audio samples), representing harmonic complex tone sequences.
         """
         # Initialize a list to store all tone sequences for this experimental session.
         soundtrack = []
@@ -128,6 +128,9 @@ class SoundGen:
         # Each trial is a linear combination of parameters
         for trial in df.itertuples():
         
+            # Initialize a sequence
+            sequence = []
+
             # Identify parts of the combination
             no_tones = trial.NO_TONES
             dev      = trial.DEV / 1000 # convert to sec
@@ -155,9 +158,6 @@ class SoundGen:
             isi_samples   = int(isi * self.sample_rate)
             dev_samples   = int(dev * self.sample_rate)
 
-            # Generate sequence with ISI gaps between tones and ITI at the end
-            sequence = []
-
             for i in range(no_tones):
 
                 # Correct for zero indexing
@@ -177,7 +177,7 @@ class SoundGen:
                             dbspl
                             )
 
-                    # Generate frequency standard tone
+                    # Generate frequency standard tone at other locations
                     else:
                         sound = self.sound_maker(
                         base_freq,
@@ -188,7 +188,7 @@ class SoundGen:
                         dbspl
                         )
 
-                # Generate frequency standard tone
+                # Generate frequency standard tone sequence
                 else:
                     sound = self.sound_maker(
                         base_freq,
@@ -202,6 +202,7 @@ class SoundGen:
                 # Apply ramp to start and end using the sine_ramp method
                 ramped_sound = self.sine_ramp(sound)
                 
+                # Add the sound to the sequence
                 sequence.append(ramped_sound)
 
                 # ----------------- Adding ISI --------------------
@@ -221,20 +222,18 @@ class SoundGen:
                     elif tone_count == dev_loc:     # ISI after
                         current_isi = isi_samples + dev_samples
 
+                # Add the ISI
                 # Note: there's one less isi in the sequence than tones.
                 if tone_count < no_tones:
                     sequence.append(np.zeros(current_isi))
                 
             # ----------------- Adding ITI --------------------
-            # Assuming the dataframe was sorted for run & trial id
             # Note: there's one less ITI than trials.
             if trial_id < no_trials:
                 sequence.append(np.zeros(iti_samples))
 
-            # Concatenate all parts of the sequence
+            # -------------- Join all segments ----------------
             final_sequence = np.concatenate(sequence)
-
-            # Append to soundtrack and to the dataframe
             soundtrack.append(final_sequence)
 
         df['AUDIO_SEQUENCE'] = soundtrack
@@ -265,7 +264,7 @@ if __name__ == "__main__":
     # Initialize the class
     sound_gen = SoundGen(params["SAMPLE_RATE"], params["TAU"])
 
-    # Generate the sequence
+    # Generate the soundtrack of the experimental session
     soundtrack, df = sound_gen.generate_soundtrack(
        df,
        params["BASE_FREQUENCY"],
@@ -281,5 +280,6 @@ if __name__ == "__main__":
     #     sd.play(soundtrack[i], samplerate = params["SAMPLE_RATE"])
     #     sd.wait()   
     
-    # Print info about the return variable
+    # Print info about the return results
     print(df.head())
+    print(f"The experiment has {len(soundtrack)} trials.")
