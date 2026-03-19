@@ -3,7 +3,6 @@
 '''
 Test script for create_soundtrack_expyriment() function.
 '''
-import numpy as np
 import pandas as pd
 from pathlib import Path
 from expyriment import design, control, stimuli, io, misc
@@ -52,7 +51,7 @@ def create_soundtrack_expyriment(df, samplerate, bitdepth, tone_duration, tone_f
 		trial_id = trial.TRIAL_NO
 		run_id   = trial.RUN_NO
 
-		print(f"TRIAL-{trial_id:02d}, RUN-{erun_id:00d}")
+		print(f"TRIAL-{trial_id:02d}, RUN-{run_id:00d}")
 
 		# Raise error if timing and frequency deviants occur on the same tone
 		if freq_loc == dev_loc:
@@ -194,6 +193,7 @@ if __name__ == "__main__":
 	exp = design.Experiment(name="test")
 	control.initialize(exp)
 	control.start(skip_ready_screen=True)
+	
 	for i in range(5):
 		for segment in soundtrack[i]:
 			segment.play()

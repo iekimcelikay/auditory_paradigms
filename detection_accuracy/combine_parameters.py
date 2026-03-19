@@ -2,7 +2,6 @@
 # Time-stamp: <2026-03-13 m.utrosa@bcbl.eu>
 
 # TODO: check that actually all VALID_COMBOS are valid ... (testing & piloting)
-# TODO: check units; timing is in milliseconds but frequency is in Hz
 # TODO: check accuracy of trial duration calculation (depends on how sequences are constructed)
 # TODO: randomize sampling deviations; sample integers not floats from log scale
 
@@ -53,6 +52,7 @@ def create_deviations(num_values, min_val, max_val):
 	random_sample = np.unique(np.random.choice(range(min_val, max_val), missing_values))
 	random_sample_list = [int(rs) for rs in random_sample]
 	log_values_list = np.sort(log_values_list + random_sample_list)
+	
 	return [int(lvl) for lvl in log_values_list]
 
 ##### ALTERNATIVE WAY TO DEFINE DEVIATIONS
@@ -76,7 +76,7 @@ def create_deviations(num_values, min_val, max_val):
 
 def calculate_trial_duration(combo, params):
 	"""
-	Calculates duration in ms for each trial combination.
+	Calculates theoretical duration in ms for each trial combination.
 	"""
 	
 	# durations = []
@@ -98,7 +98,6 @@ def calculate_trial_duration(combo, params):
 # paired_trials = list(zip(VALID_COMBOS, COMBO_DURATIONS))
 # random.shuffle(paired_trials)
 
-
 def create_experimental_sessions(params, sesID, save_csv=True, plot_hist=False, plot_bar=False, MAX_BLOCK_DURATION_MIN=15):
 	"""
 	Combines specified parameters in valid combinations, then randomly samples trials per run to
@@ -119,10 +118,15 @@ def create_experimental_sessions(params, sesID, save_csv=True, plot_hist=False, 
 	"""
 	
 	# 01. SPECIFY THE PARAMETERS ------------------------------------------------------------------
-	### a. Calculate all values needed for constructing trials
+	### a. Calculate values needed for constructing all trials in a single experimental session.
 	ISI = random.sample(
 		range(params["ISI_MIN"], params["ISI_MAX"] + 1, params["ISI_STEP"]),
-		params["ISI_NO"])
+		params["ISI_NO"]
+		)
+	ITI = random.sample(
+		range(params["ITI_MIN"], params["ITI_MAX"] + 1),
+		params["ITI_NO"]
+		)
 	NO_TONES = list(range(params["MIN_TONES"], params["MAX_TONES"] + 1))
 
 	# Define the absolute size of tone's timing deviation in milliseconds, including zero.
@@ -141,20 +145,23 @@ def create_experimental_sessions(params, sesID, save_csv=True, plot_hist=False, 
 	FREQ = create_deviations(params["FREQ_NO"], params["FREQ_MIN"], params["FREQ_MAX"] + 1)
 	FREQ.insert(0, 0)
 
-	# Type of frequency deviation
-	FREQ_TYPE = ['higher', 'standard', 'lower']
-
 	# Set the position of the frequency deviation in the sequence.
 	FREQ_LOC = list(range(params["FIRST_FREQ_LOC"], params["LAST_FREQ_LOC"] + 1))
 	FREQ_LOC.insert(0, 0)
 
-	### b. Check the relationships between parameters
-	# ITI is longer than the longest ISI & DEV: for block separability
-	ITI = [params["ITI"]] # TODO: randomize/counterbalance the ITI
+	### b. Check compatibility of the relationships between parameters
+	# To ensure trial separability, ITI must be longer than the longest ISI + tone duration
+	if min(ITI) <= (max(ISI) + params["TONE_DURATION"]):
+		raise ValueError(
+				f'Min ITI ({min(ITI)} ms) is too short given the '
+				f'max ISI ({max(ISI)} ms) & tone duration ({params["TONE_DURATION"]} ms).'
+		)
+
+	# To ensure trial separability, ITI must be longer than the longest ISI & DEV
 	if min(ITI) <= max(ISI) or min(ITI) <= max(DEV):
 		raise ValueError(
-				f'ITI ({min(ITI)} ms) is too short given the '
-				f'max ISI ({max(ISI)} ms) / DEV ({max(DEV)} ms).'
+				f'Min ITI ({min(ITI)} ms) is too short given the '
+				f'max ISI ({max(ISI)} ms) / max DEV ({max(DEV)} ms).'
 		)
 
 	# For separability of a new block in terms of tempo
@@ -168,7 +175,7 @@ def create_experimental_sessions(params, sesID, save_csv=True, plot_hist=False, 
 
 	# 03. CREATE THE COMBINATIONS -----------------------------------------------------------------
 	# ALL_COMBOS: A list of tuples with all posible combinations of the above parameters.
-	ALL_COMBOS = list(product(NO_TONES, DEV, DEV_TYPE, DEV_LOC, ISI, ITI, FREQ, FREQ_TYPE, FREQ_LOC))
+	ALL_COMBOS = list(product(NO_TONES, DEV, DEV_TYPE, DEV_LOC, ISI, ITI, FREQ, FREQ_LOC))
 
 	# VALID_COMBOS: removing invalid parameter combinations and adding constraints.
 	VALID_COMBOS = []
@@ -181,8 +188,7 @@ def create_experimental_sessions(params, sesID, save_csv=True, plot_hist=False, 
 	    isi       = combo[4]
 	    iti       = combo[5]
 	    freq      = combo[6]
-	    freq_type = combo[7]
-	    freq_loc  = combo[8]
+	    freq_loc  = combo[7]
 
 	    # dev_loc cannot exceed no_tones
 	    if dev_loc >= no_tones:
@@ -202,14 +208,14 @@ def create_experimental_sessions(params, sesID, save_csv=True, plot_hist=False, 
 	        if dev_loc == 0 or dev_type == "on_time":
 	            continue
 
-	    # If FREQ == 0, then FREQ_TYPE must be "standard" and FREQ_LOC must be 0
+	    # If FREQ == 0, then FREQ_LOC must be 0
 	    if freq == 0:
-	        if freq_type != "standard" or freq_loc != 0:
+	        if freq_loc != 0:
 	            continue
 
 	    # If FREQ != 0, then FREQ_LOC cannot be 0 and type cannot be "standard"
 	    if freq != 0:
-	        if freq_loc == 0 or freq_type == "standard":
+	        if freq_loc == 0:
 	            continue
 
 	    # Frequency and timing deviants cannot occur on the same tone
@@ -231,46 +237,49 @@ def create_experimental_sessions(params, sesID, save_csv=True, plot_hist=False, 
 	    # If all checks pass, add to list
 	    VALID_COMBOS.append(combo)
 
+	# 04. RANDOM SAMPLE GIVEN CONSTRAINTS ---------------------------------------------------------
 	# Create a list of all trials for a single experimental session
 	# and calculate their durations.
-	RUN_COMBOS = []
-	BLOCK_DURATIONS = []
-	for run in range(params["NO_RUNS"]):
-		TRIAL_COMBOS = random.sample(VALID_COMBOS, params["NO_TRIALS"])
+	# RUN_COMBOS = []
+	# BLOCK_DURATIONS = []
+	# for run in range(params["NO_RUNS"]):
+
+	# 	# Take a random sample ensuring that we have at least 2 repetitions of each deviation
+	# 	TRIAL_COMBOS = random.sample(VALID_COMBOS, params["NO_TRIALS"])
 		
-		block_duration = 0
-		for trial_no, trial in enumerate(TRIAL_COMBOS):
+	# 	block_duration = 0
+	# 	for trial_no, trial in enumerate(TRIAL_COMBOS):
 
-			# Add trial number (ID) to the tuples
-			trial = trial + tuple((trial_no + 1,))
+	# 		# Add trial number (ID) to the tuples
+	# 		trial = trial + tuple((trial_no + 1,))
 
-			# Add run number (ID) to the tuples
-			trial = trial + tuple((run + 1,))
+	# 		# Add run number (ID) to the tuples
+	# 		trial = trial + tuple((run + 1,))
 
-			# Add the tuple with added run & trial no
-			RUN_COMBOS.append(trial)
+	# 		# Add the tuple with added run & trial no
+	# 		RUN_COMBOS.append(trial)
 
-			# Calculate trial duration
-			trial_duration = calculate_trial_duration(trial, params)
-			block_duration += trial_duration
+	# 		# Calculate trial duration
+	# 		trial_duration = calculate_trial_duration(trial, params)
+	# 		block_duration += trial_duration
 
-		BLOCK_DURATIONS.append(block_duration)
+	# 	BLOCK_DURATIONS.append(block_duration)
 
-	# Check average duration of one block
-	block_duration_min = np.mean(BLOCK_DURATIONS) / 60000
-	run_duration_min = sum(BLOCK_DURATIONS) / 60000
-	if block_duration_min > MAX_BLOCK_DURATION_MIN:
-		warning_msg = (
-		f"WARNING: The average block duration ({block_duration_min:.2f} min) "
-		f"exceeds the recommended maximum of {MAX_BLOCK_DURATION_MIN} min. "
-		f"Ensure balance between challenge & exhaustion."
-	    )
-		warnings.warn(warning_msg)
-	else:
-		print(f"Block duration: {block_duration_min:.2f} min")
-		print(f"Experiment duration: {run_duration_min:.2f} min")
+	# # Check average duration of one block
+	# block_duration_min = np.mean(BLOCK_DURATIONS) / 60000
+	# run_duration_min = sum(BLOCK_DURATIONS) / 60000
+	# if block_duration_min > MAX_BLOCK_DURATION_MIN:
+	# 	warning_msg = (
+	# 	f"WARNING: The average block duration ({block_duration_min:.2f} min) "
+	# 	f"exceeds the recommended maximum of {MAX_BLOCK_DURATION_MIN} min. "
+	# 	f"Ensure balance between challenge & exhaustion."
+	#     )
+	# 	warnings.warn(warning_msg)
+	# else:
+	# 	print(f"Block duration: {block_duration_min:.2f} min")
+	# 	print(f"Experiment duration: {run_duration_min:.2f} min")
 
-	# 04. SAVE THE COMBINATIONS -------------------------------------------------------------------
+	# 05. SAVE THE COMBINATIONS -------------------------------------------------------------------
 	# Create the dataframe
 	df = pd.DataFrame(
 		RUN_COMBOS,
@@ -282,7 +291,6 @@ def create_experimental_sessions(params, sesID, save_csv=True, plot_hist=False, 
 		"ISI",
 		"ITI",
 		"FREQ",
-		"FREQ_TYPE",
 		"FREQ_LOC",
 		"TRIAL_NO",
 		"RUN_NO"]
@@ -297,15 +305,15 @@ def create_experimental_sessions(params, sesID, save_csv=True, plot_hist=False, 
 		df.to_csv(out_dir, sep=",", index=False)
 		print(f"\nSaved {filename} to {out_path}.")
 
-	# 05. CALCULATE THE DISTRIBUTION --------------------------------------------------------------
-	# Get the number of timing devs per category of frequency deviation
+	# 06. CALCULATE THE DISTRIBUTION --------------------------------------------------------------
+	# Get timing devs per category of frequency deviation
 	groups = df.groupby(by=["FREQ", "DEV"])["DEV"].count()
 
 	# Add zero occurrence if deviation doesn't exist with a frequency
 	complete_groups = groups.unstack(fill_value=0).stack()
 	plot_groups = complete_groups.reset_index(name='COUNT')
 
-	# 06. PLOT THE DISTRIBUTION -------------------------------------------------------------------
+	# 07. PLOT THE DISTRIBUTION -------------------------------------------------------------------
 	### a. Plotting a histogram from original data
 	if plot_hist:
 		sns.set_theme(style="white", palette="colorblind", font="sans-serif")
@@ -424,12 +432,14 @@ def create_experimental_sessions(params, sesID, save_csv=True, plot_hist=False, 
 if __name__ == "__main__":
 	params = {
 	
-	"OUT_PATH" : "/home/mutrosa/Documents/projects/auditory_paradigms/detection_accuracy/out",
+	"OUT_PATH" : "/home/mutrosa/Documents/projects/auditory_paradigms/detection_accuracy/plots",
 
 	# a. Overall structure of the experimental session
 	"NO_RUNS"   : 4, 	   # Number of blocks, equal to no. of func scans in MRI protocol
-	"NO_TRIALS" : 132,	   # Stimuli repetitions, where a trial is one tone sequence (stimulus)
-	"ITI"       : 1500,    # Inter trial interval is the time between two sequences (trials)
+	"NO_TRIALS" : 100,	   # Stimuli repetitions, where a trial is one tone sequence (stimulus)
+	"ITI_MIN"   : 800,     # Noticably larger than max(ISI) + tone_duration
+	"ITI_MAX"   : 1800,    # Smaller than inter-block-interval (max rest time = 2 min)
+	"ITI_NO"    : 3,
 	
 	# b. Tone sequence
 	"MIN_TONES"     : 7,    # Min. no. of tones in a single sequence
@@ -445,7 +455,7 @@ if __name__ == "__main__":
 	# d. Timing deviants
 	"DEV_MIN": 1,          # Min. tone timing deviation  
 	"DEV_MAX": 300,        # Max. tone timing deviation
-	"DEV_NO" : 66,         # How many deviations to test?
+	"DEV_NO" : 99,         # How many deviations to test?
 
 	"FIRST_DEV_LOC" : 4,  # The first tone that can be displaced:
 						  # e.g.: if you want the first few tones to be timing standards
@@ -463,6 +473,6 @@ if __name__ == "__main__":
 	"LAST_FREQ_LOC"  : 6,  # The last tone to be displaced frequency-wise
 	}
 
-	for session in range(1000):
+	for session in range(5):
 		session = session + 1
-		create_experimental_sessions(params, session, save_csv=True)
+		create_experimental_sessions(params, session, save_csv=True, plot_hist=True, plot_bar=True)

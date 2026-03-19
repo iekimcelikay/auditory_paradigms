@@ -276,9 +276,9 @@ if __name__ == "__main__":
        )
 
     # Play five trials
-    # for i in range(5):
-    #     sd.play(soundtrack[i], samplerate = params["SAMPLE_RATE"])
-    #     sd.wait()   
+    for i in range(5):
+        sd.play(soundtrack[i], samplerate = params["SAMPLE_RATE"])
+        sd.wait()   
     
     # Print info about the return results
     print(df.head())
