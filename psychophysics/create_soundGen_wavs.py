@@ -1,6 +1,15 @@
 #! /usr/bin/env python
 # Time-stamp: <03-10-2025>
 # Monika Utrosa Skerjanec
+'''
+This code creates stimuli using soundGen module.
+Returns .wav files saved on disk.
+
+TODO: this code is not updated to create sounds with frequency deviants.
+      It relies on an earlier version of "stimuli_generation" script
+      My guess is that it works with the code Sofia created.
+      But that code had some issues with creation of deltas.
+'''
 
 #1: INSTALL LIBRARIES
 import random
