@@ -1,6 +1,6 @@
 #! /usr/bin/env python
-# Time-stamp: <2026-03-20 m.utrosa@bcbl.eu>
-# TODO: replace frequency dev with naturalistic range (musical notes or soundscape freq.)
+# Time-stamp: <2026-03-27 m.utrosa@bcbl.eu>
+# TODO: replace frequency dev in params with naturalistic range (musical notes or soundscape freq.)
 
 """
 Creates a list of dictionaries with all possible valid parameter combinations 
@@ -20,10 +20,8 @@ import random
 import warnings
 import numpy as np
 import pandas as pd
-import seaborn as sns
 from pathlib import Path
 from itertools import product
-import matplotlib.pyplot as plt
 
 # 01. DEFINE FUNCTIONS  ---------------------------------------------------------------------------
 def create_deviations(num_values, min_val, max_val, zero=True, N=100):
@@ -275,16 +273,22 @@ def create_experimental_sessions(params, sesID, save_csv=False, MAX_BLOCK_DURATI
 		
 		# Allow random sampling with replacement for deviants
 		# This means that freq deviants are not fixed
-		FREQ_DEVS = tuple(random.choices(FREQ, k=FREQ_REP[0]))
+		FREQ_DEVS = random.choices(FREQ, k=FREQ_REP[0])
 
 		# Randomly choose the location of the FREQ_DEVS
 		# Without replacement
-		FREQ_LOC = tuple(random.sample(FREQ_LOC_ALL, FREQ_REP[0]))
+		FREQ_LOC = random.sample(FREQ_LOC_ALL, FREQ_REP[0])
 
-		# Add tuples to the trial dict. Tuples are immutable ;)
-		# If no FREQ_DEVS occur in the current trial, the tuples are empty.
-		trial["freq_dev"] = FREQ_DEVS
-		trial["freq_loc"] = FREQ_LOC
+		# Add lists to the trial dict.
+		# If no FREQ_DEVS occur in the current trial, the lists are empty.
+		if bool(FREQ_DEVS) == True:
+			trial["freq_dev"] = FREQ_DEVS
+			trial["freq_loc"] = FREQ_LOC
+			trial["freq_dev_no"] = len(FREQ_DEVS)
+		else:
+			trial["freq_dev"] = [False]
+			trial["freq_loc"] = [False]
+			trial["freq_dev_no"] = len(FREQ_DEVS)
 		
 		# Append the final structure
 		COMBOS_ALL_DEV.append(trial)
@@ -367,20 +371,26 @@ def create_experimental_sessions(params, sesID, save_csv=False, MAX_BLOCK_DURATI
 	df = pd.DataFrame(BLOCK_COMBOS)
 
 	# Initialize a column for the difference between the standard and deviant frequency
-	df['freq_diff'] = None
+	df['freq_diff'] = [[None] for _ in range(len(df))]
+
+	# Add the difference, if applicable
 	for row, series in df.iterrows():
 		std_freq = series.base_freq 
-		f_diff   = tuple()
-		for i in series.freq_dev:
-			diff = np.abs(std_freq - np.abs(i))
-			f_diff = f_diff + tuple([diff])
-		df.at[row, 'freq_diff'] = f_diff
+		f_diff   = []
 
-	# Save the dataframe as csv
+		for i in series.freq_dev:
+			if i is not None:
+				diff = np.abs(std_freq - np.abs(i))
+				f_diff.append(int(diff))
+		
+		df.at[row, 'freq_diff'] = f_diff if f_diff else [False]
+
+	# Save the dataframe as a .csv file
 	filename =  f"exp_parameter_combo_ses-{sesID:003d}.csv"
 	out_path = Path(params["OUT_PATH"])
 	out_path.mkdir(exist_ok=True, parents=True)
 	out_dir  = out_path / filename
+
 	if save_csv:
 		df.to_csv(out_dir, sep=",", index=False)
 		print(f"\nSaved {filename} to {out_path}.")
@@ -429,6 +439,6 @@ if __name__ == "__main__":
 	"LAST_FREQ_LOC"  : 7,  # The last tone to be displaced frequency-wise
 	}
 
-	for session in range(1000):
+	for session in range(2):
 		session = session + 1
 		create_experimental_sessions(params, session, save_csv=True)
