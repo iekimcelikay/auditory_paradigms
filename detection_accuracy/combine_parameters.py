@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-# Time-stamp: <2026-03-27 m.utrosa@bcbl.eu>
+# Time-stamp: <2026-03-28 m.utrosa@bcbl.eu>
 # TODO: replace frequency dev in params with naturalistic range (musical notes or soundscape freq.)
 
 """
@@ -244,6 +244,9 @@ def create_experimental_sessions(params, sesID, save_csv=False, MAX_BLOCK_DURATI
 	COMBOS_ALL_DEV = []
 	for count, trial in enumerate(VALID_TARGET_COMBOS_REPS):
 
+		# Add absolute values of timing deviants
+		trial["dev_abs"] = abs(trial["dev"])
+		
 		# Add randomly fixed parameters to the trial dict
 		trial["no_tones"] = NO_TONES[0]
 		trial["isi"] = ISI[0]
@@ -275,6 +278,14 @@ def create_experimental_sessions(params, sesID, save_csv=False, MAX_BLOCK_DURATI
 		# This means that freq deviants are not fixed
 		FREQ_DEVS = random.choices(FREQ, k=FREQ_REP[0])
 
+		# Determine the type of sampled deviants (> or < than base freq)
+		FREQ_DEV_TYPE = []
+		for fdt in FREQ_DEVS:
+			if fdt < BASE_FREQUENCY[0]:
+				FREQ_DEV_TYPE.append("lower")
+			else:
+				FREQ_DEV_TYPE.append("higher")
+		
 		# Randomly choose the location of the FREQ_DEVS
 		# Without replacement
 		FREQ_LOC = random.sample(FREQ_LOC_ALL, FREQ_REP[0])
@@ -283,10 +294,12 @@ def create_experimental_sessions(params, sesID, save_csv=False, MAX_BLOCK_DURATI
 		# If no FREQ_DEVS occur in the current trial, the lists are empty.
 		if bool(FREQ_DEVS) == True:
 			trial["freq_dev"] = FREQ_DEVS
+			trial["freq_dev_type"] = FREQ_DEV_TYPE
 			trial["freq_loc"] = FREQ_LOC
 			trial["freq_dev_no"] = len(FREQ_DEVS)
 		else:
 			trial["freq_dev"] = [False]
+			trial["freq_dev_type"] = ["standard"]
 			trial["freq_loc"] = [False]
 			trial["freq_dev_no"] = len(FREQ_DEVS)
 		
@@ -372,18 +385,27 @@ def create_experimental_sessions(params, sesID, save_csv=False, MAX_BLOCK_DURATI
 
 	# Initialize a column for the difference between the standard and deviant frequency
 	df['freq_diff'] = [[None] for _ in range(len(df))]
+	df['freq_diff_abs'] = [[None] for _ in range(len(df))]
 
 	# Add the difference, if applicable
 	for row, series in df.iterrows():
-		std_freq = series.base_freq 
-		f_diff   = []
+		f_diff = []
+		f_diff_abs = []
+		std_freq = series.base_freq
 
 		for i in series.freq_dev:
-			if i is not None:
-				diff = np.abs(std_freq - np.abs(i))
+			if i:
+				diff_abs = np.abs(std_freq - i)
+				f_diff_abs.append(int(diff_abs))
+
+				if i > std_freq: # higher devs
+					diff = diff_abs
+				else: # lower devs
+					diff = -diff_abs
 				f_diff.append(int(diff))
-		
+	
 		df.at[row, 'freq_diff'] = f_diff if f_diff else [False]
+		df.at[row, 'freq_diff_abs'] = f_diff_abs if f_diff_abs else [False]
 
 	# Save the dataframe as a .csv file
 	filename =  f"exp_parameter_combo_ses-{sesID:003d}.csv"
@@ -439,6 +461,6 @@ if __name__ == "__main__":
 	"LAST_FREQ_LOC"  : 7,  # The last tone to be displaced frequency-wise
 	}
 
-	for session in range(2):
+	for session in range(1000):
 		session = session + 1
 		create_experimental_sessions(params, session, save_csv=True)
